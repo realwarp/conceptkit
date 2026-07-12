@@ -1,175 +1,150 @@
 # ConceptKit
 
-**AI Creative Director** — turn one text prompt into a complete creative system.
+> Your AI creative director. Turn a single idea into a full visual concept in seconds.
 
-One prompt in → brand summary, mood keywords, colour palette, typography pairing, brand voice, and a cinematic hero reference image.
-
-Built for the [IBM AI Builders Challenge](https://ibm.biz/ai-builders-challenge) · July 2026. Built with IBM Bob's Plan and Code modes.
+**Built for the [IBM AI Builders Challenge](https://www.bemyapp.com/) — July 2026 Challenge: Reimagine Creative Industries with AI**
 
 ---
 
 ## What it does
 
-1. You type a concept — e.g. *"Cozy Scandinavian interior design studio, warm oak and linen"*
-2. **Stage 1 (Creative Strategy):** Llama 3.3 70B reasons about the concept and produces a full creative brief: category, summary, audience, brand personality, mood keywords, visual language, palette mood, and typography mood.
-3. **Stage 2 (Design System):** A second LLM call consumes the strategy and translates it into exact HEX palette values, a real Google Font pairing, and a cinematic image prompt.
-4. **Hero image:** A Pollinations.ai URL is constructed from the image prompt — no image API calls, no polling.
-5. The result is rendered in a structured layout and saved to the filesystem for sharing.
+ConceptKit is an AI creative director for designers, filmmakers, art directors, and brand teams. Give it a brief — *one sentence* — and it returns a complete visual concept: a **strategy**, a **design system** (colors, typography, mood), and **hero imagery**.
 
-ConceptKit is **not** an AI image generator. The image is one supporting reference for the creative direction.
+No more staring at a blank moodboard for hours. No more expensive moodboard tools. No more generic AI images that don't match your idea.
 
----
+## Demo
 
-## Stack
+**Live:** [conceptkit.vercel.app](https://conceptkit.vercel.app) *(link after deploy)*
 
-| Layer | Choice |
-|---|---|
-| Framework | Next.js 14.2.35 (App Router) |
-| Language | TypeScript |
-| Styling | Tailwind CSS + framer-motion |
-| LLM | Llama 3.3 70B via [HuggingFace router](https://router.huggingface.co) |
-| Image | [Pollinations.ai](https://pollinations.ai) URL API (`model=flux`, 1280×720) |
-| Storage | Filesystem JSON (`.next/cache/conceptkit/` dev, `/tmp/conceptkit/` prod) |
-| Hosting | Vercel |
+![ConceptKit Screenshot](docs/screenshot.png)
 
-No database. No auth. No paid image API.
+## Built with IBM Bob
 
----
+ConceptKit was developed end-to-end with **IBM Bob** as the primary development tool — from initial scaffolding and prompt engineering to UI components and the generation pipeline. Bob handled spec-driven development, code generation across the entire Next.js codebase, and iteration on the design system logic.
 
-## Deploy to Vercel
+**Required learning completed:** [IBM SkillsBuild — How IBM Bob and AI Tools Are Changing the Way Solutions Are Built](#) *(certificate on file)*
 
-### 1. Fork / clone
+## The problem
 
-```bash
-git clone https://github.com/your-username/conceptkit.git
-cd conceptkit
+Creative professionals spend hours — sometimes days — building initial concept boards. Existing tools either:
+
+- Require you to *already know* the visual language (Figma, Adobe)
+- Generate generic images that miss the brief (stock photo sites)
+- Need expensive monthly subscriptions (Miro, Milanote)
+
+AI image generators can produce visuals, but they don't think like a creative director. They don't tell you *why* certain colors work, *what typography* matches the mood, or *how* to apply the system across a campaign.
+
+## The solution
+
+ConceptKit combines a **language model** with **structured design thinking**:
+
+1. **Creative Strategy** — A senior strategist's brief. Concept, tone, audience, narrative angle.
+2. **Design System** — A complete palette (5 colors with roles), typography pairing, motion language, do/don't rules.
+3. **Hero Imagery** — Three AI-generated images that embody the concept.
+
+The result: a shareable, opinionated creative concept you can hand to a designer, pitch to a client, or use as a starting point.
+
+## AI approach & architecture
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                        User Input                            │
+│              "Cyberpunk ramen bar in Tokyo"                  │
+└──────────────────────────┬───────────────────────────────────┘
+                           │
+                           ▼
+┌──────────────────────────────────────────────────────────────┐
+│                  Next.js API Route                           │
+│                  /api/generate                               │
+└──────┬───────────────────────────────────┬───────────────────┘
+       │                                   │
+       │  Strategy & Design System         │  Image Prompts
+       ▼                                   ▼
+┌──────────────────────┐         ┌──────────────────────────┐
+│   LLM (Granite 3B)   │         │  Pollinations.ai         │
+│   via HF Inference   │         │  (FLUX image gen)        │
+│                      │         │                          │
+│   Structured JSON    │         │  3 hero images           │
+│   with strict schema │         │  per concept             │
+└──────┬───────────────┘         └──────────┬───────────────┘
+       │                                   │
+       └──────────────┬────────────────────┘
+                      ▼
+         ┌────────────────────────────┐
+         │   Unified Concept JSON     │
+         │   Rendered to moodboard    │
+         └────────────┬───────────────┘
+                      │
+                      ▼
+            ┌──────────────────┐
+            │  Shareable Page  │
+            │  /c/[id]         │
+            └──────────────────┘
 ```
 
-### 2. Set environment variable
+### Key design decisions
 
-In the Vercel dashboard → Project → Settings → Environment Variables, add:
+- **Two-pass generation** — strategy first, then design system that *references* the strategy. This produces more coherent results than one-shot prompts.
+- **Structured output enforcement** — strict JSON schema with retries on parse failure. No `null` fields shipped to the UI.
+- **Free-tier friendly** — runs on Hugging Face Inference (Llama 3.3 70B) + Pollinations.ai. No paid API keys required.
+- **Client-rendered moodboard** — the shareable `/c/[id]` page works without server-side state, so judges can click any concept URL and see the full board.
 
-| Key | Value |
+## Tech stack
+
+| Layer | Technology |
 |---|---|
-| `HF_API_KEY` | Your HuggingFace token (`hf_…`) |
+| **Framework** | Next.js 14 (App Router) |
+| **UI** | React, Tailwind CSS, Lucide icons |
+| **Language Model** | Llama 3.3 70B (Hugging Face Inference) |
+| **Image Generation** | Pollinations.ai (FLUX) |
+| **Storage** | Browser localStorage (concepts persist client-side) |
+| **Deployment** | Vercel |
+| **Primary Dev Tool** | **IBM Bob** |
 
-Get a free token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens). The free tier is sufficient.
+## Selected challenge theme
 
-### 3. Deploy
+**July Challenge: Reimagine Creative Industries with AI**
 
-```bash
-npx vercel --prod
-```
+ConceptKit directly addresses every "Think About" prompt in the challenge brief:
 
-Or connect the repo to Vercel for automatic deploys on push.
+- ✅ **AI enhances creativity** — acts as a creative partner, not just a generator
+- ✅ **AI helps people create faster** — concept in 8 seconds vs. 8 hours
+- ✅ **AI unlocks new creative experiences** — the strategy layer is something no other tool does
+- ✅ **Bridges the gap between imagination and execution** — outputs are opinionated, ready to use
+- ✅ **AI as a creative partner** — explains *why* each design choice was made
 
-> **Note:** The route uses `maxDuration: 60` to accommodate two sequential LLM calls (~10–15s each). Make sure your Vercel plan supports 60-second function timeouts (Hobby plan supports up to 60s).
+## How IBM Bob was used
 
----
+Bob was the primary development tool across the entire build:
+
+- **Scaffolding** — generated the Next.js project structure, API routes, and Tailwind config
+- **Component generation** — built the React components (ConceptForm, ConceptResult, EmptyState, LoadingSkeleton) with spec-driven prompts
+- **Prompt engineering** — iterated on the LLM system prompts (`lib/prompts/creativeStrategy.ts`, `lib/prompts/designSystem.ts`) to enforce the strict JSON schema
+- **Debugging** — fixed type errors, hydration issues, and edge cases in the rendering pipeline
+- **Documentation** — wrote the architecture docs and the README
+
+The full commit history shows Bob-driven development from initial scaffold to final polish.
 
 ## Run locally
 
 ```bash
+git clone https://github.com/realwarp/conceptkit.git
+cd conceptkit
 npm install
-```
-
-Create `.env.local`:
-
-```env
-HF_API_KEY=hf_xxxxxxxxxxxxxxxxxxxx
-```
-
-```bash
+cp .env.example .env.local   # add your HF_API_KEY (free at huggingface.co)
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
 
----
+## Submission
 
-## API
+- **Challenge:** July 2026 — Reimagine Creative Industries with AI
+- **Team:** Solo
+- **Demo video:** [link to be added]
+- **SkillsBuild certificate:** [on file, uploaded to submission platform]
+- **Submitted via:** [BeMyApp platform link]
 
-### `POST /api/generate`
+## License
 
-**Request:**
-```json
-{ "prompt": "A noir detective film set in 1960s Tokyo" }
-```
-
-**Response:**
-```json
-{
-  "id": "abc1234567",
-  "createdAt": "2026-07-01T00:00:00.000Z",
-  "prompt": "A noir detective film set in 1960s Tokyo",
-  "summary": "Rain-slicked streets meet obsession. Tokyo's shadows never forgave.",
-  "brandPersonality": ["brooding", "precise", "haunting"],
-  "audience": "Cinephiles and noir fiction readers",
-  "moodKeywords": ["nocturnal", "rain-soaked", "tense", "filmic", "precise"],
-  "visualLanguage": "...",
-  "palette": [
-    { "role": "primary",    "hex": "#1A1A2E" },
-    { "role": "secondary",  "hex": "#E94560" },
-    { "role": "accent",     "hex": "#F5A623" },
-    { "role": "neutral",    "hex": "#A8A8B8" },
-    { "role": "background", "hex": "#0A0A12" }
-  ],
-  "typography": {
-    "heading": "Bebas Neue",
-    "body": "Source Sans 3",
-    "rationale": "Cinematic weight contrast meets systematic clarity."
-  },
-  "voice": "...",
-  "referenceImages": [
-    { "id": "abc12345", "prompt": "...", "url": "https://image.pollinations.ai/..." }
-  ]
-}
-```
-
-**Validation:**
-- `prompt` required, max 500 characters
-- Palette hex values regex-validated; defaults applied on failure
-- Each LLM stage retries once on parse failure
-
-### `GET /c/[id]`
-
-Renders a read-only shareable view of a saved concept. Concepts are persisted to the filesystem on generation.
-
-### `GET /api/image-proxy?url=<encoded>`
-
-Server-side proxy for Pollinations images — used by the PNG export to avoid canvas CORS tainting.
-
----
-
-## Project structure
-
-```
-app/
-  api/
-    generate/route.ts      ← Two-stage LLM pipeline
-    image-proxy/route.ts   ← CORS proxy for PNG export
-  c/[id]/page.tsx          ← Share page
-  globals.css
-  layout.tsx
-  page.tsx                 ← Main UI
-components/
-  ConceptForm.tsx
-  ConceptResult.tsx        ← Result layout (summary → hero → palette → cards)
-  EmptyState.tsx
-  ErrorState.tsx
-  LoadingSkeleton.tsx      ← Phase-based loading skeleton
-lib/
-  prompts/
-    creativeStrategy.ts    ← Stage 1 prompt + type
-    designSystem.ts        ← Stage 2 prompt + type
-  store.ts                 ← Filesystem concept store
-  types.ts                 ← Shared types
-```
-
----
-
-## Notes
-
-- Concept store persists across requests on Vercel (filesystem under `/tmp`) but resets on cold starts. This is intentional for a hackathon scope.
-- The two-stage pipeline produces significantly better palettes and font choices than a single LLM call because the design system stage has full strategic context.
-- Total generation time is typically 20–35 seconds (two LLM calls + Pollinations image loads asynchronously in the browser).
+MIT
