@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import type { Color, ConceptResult } from "@/lib/types";
-import { saveConcept } from "@/lib/share";
+import { encodeConcept } from "@/lib/share";
 import {
   CREATIVE_STRATEGY_PROMPT,
   type CreativeStrategy,
@@ -290,8 +290,9 @@ export async function POST(req: Request) {
       }],
     };
 
-    saveConcept(conceptResult);
-    return NextResponse.json(conceptResult);
+    const shareId = encodeConcept(conceptResult);
+    const response = { ...conceptResult, shareId };
+    return NextResponse.json(response);
 
   } catch (err: unknown) {
     console.error("Generate error:", err);

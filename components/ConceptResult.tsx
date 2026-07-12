@@ -381,7 +381,7 @@ export default function ConceptResultView({
           </button>
           <button
             className="btn-secondary"
-            onClick={() => copyText(`${window.location.origin}/c/${result.id}`, "Share link")}
+            onClick={() => copyText(`${window.location.origin}/c/${result.shareId}`, "Share link")}
           >
             ⟁ Copy share link
           </button>

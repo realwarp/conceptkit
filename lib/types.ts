@@ -19,6 +19,7 @@ export type ReferenceImage = {
 
 export type ConceptResult = {
   id: string;
+  shareId?: string;
   createdAt: string;
   prompt: string;
   summary: string;
