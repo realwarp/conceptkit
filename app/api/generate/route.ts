@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import type { Color, ConceptResult } from "@/lib/types";
-import { saveConcept } from "@/lib/store";
+import { saveConcept } from "@/lib/share";
 import {
   CREATIVE_STRATEGY_PROMPT,
   type CreativeStrategy,

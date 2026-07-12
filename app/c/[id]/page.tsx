@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { Sparkles } from "lucide-react";
 import ConceptResultView from "@/components/ConceptResult";
-import { getConcept } from "@/lib/store";
+import { decodeConcept, extractFromShareParam } from "@/lib/share";
 
 export const runtime = "nodejs";
 
@@ -10,7 +10,7 @@ type SharePageProps = {
 };
 
 export default function SharePage({ params }: SharePageProps) {
-  const result = getConcept(params.id);
+  const result = decodeConcept(extractFromShareParam(params.id));
 
   if (!result) notFound();
 
