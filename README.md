@@ -1,149 +1,178 @@
 # ConceptKit
 
-> Your AI creative director. Turn a single idea into a full visual concept in seconds.
+> Your AI creative director. Turn a single sentence into a full visual concept — palette, typography, mood, voice, and reference imagery — in under 10 seconds.
 
-**Built for the [IBM AI Builders Challenge](https://www.bemyapp.com/) — July 2026 Challenge: Reimagine Creative Industries with AI**
+![ConceptKit hero concept](docs/concept.png)
 
----
+ConceptKit is built for the **IBM AI Builders Challenge (July 2026)** under the *"Reimagine Creative Industries with AI"* theme. It is an AI creative partner for designers, filmmakers, marketers, and indie builders who need to go from a vague idea to a coherent visual direction without opening Figma, Pinterest, or five browser tabs.
 
 ## What it does
 
-ConceptKit is an AI creative director for designers, filmmakers, art directors, and brand teams. Give it a brief — *one sentence* — and it returns a complete visual concept: a **strategy**, a **design system** (colors, typography, mood), and **hero imagery**.
+Give ConceptKit a one-line idea. It returns a **complete creative direction**:
 
-No more staring at a blank moodboard for hours. No more expensive moodboard tools. No more generic AI images that don't match your idea.
+- **Brand summary** — one paragraph framing the concept
+- **Brand personality** — 3–5 adjectives that guide every visual decision
+- **Audience** — who the concept is for and how it speaks to them
+- **Mood keywords** — 5 single words that anchor the vibe
+- **Visual language** — concrete aesthetic direction (e.g. *"editorial, soft grain, generous negative space"*)
+- **Color palette** — 5 hex colors with semantic roles (primary / secondary / accent / neutral / background) and a rationale for each
+- **Typography pairing** — heading + body fonts with a reason for the choice
+- **Voice** — how the brand writes
+- **Reference images** — 4 AI-generated mood images, each with the prompt used to create it
 
-## Demo
+Every concept is shareable via a unique URL (e.g. `/c/aB3xYkL9mN`).
 
-**Live:** [conceptkit.vercel.app](https://conceptkit.vercel.app) *(link after deploy)*
+## Problem
 
-![ConceptKit Screenshot](docs/screenshot.png)
+Creative professionals spend 30–90 minutes on the *first step* of any project: building a moodboard. They bounce between Pinterest, Dribbble, Google Fonts, Coolors, and image generators, copy-pasting hex codes into a Google Doc, then rewriting the brief because the fonts don't match the palette. ConceptKit compresses that workflow into a single prompt and a single page.
 
-## Built with IBM Bob
+## Solution
 
-ConceptKit was developed end-to-end with **IBM Bob** as the primary development tool — from initial scaffolding and prompt engineering to UI components and the generation pipeline. Bob handled spec-driven development, code generation across the entire Next.js codebase, and iteration on the design system logic.
+ConceptKit is a single-page web app that:
 
-**Required learning completed:** [IBM SkillsBuild — How IBM Bob and AI Tools Are Changing the Way Solutions Are Built](#) *(certificate on file)*
+1. Takes a natural-language concept (e.g. *"a quiet productivity app for people who hate productivity apps"*)
+2. Sends a structured prompt to an LLM that returns a strict JSON schema
+3. Validates the schema, then enriches each item with rationale and visual reasoning
+4. Generates 4 reference images via Pollinations.ai (Flux model) using the visual language
+5. Renders a unified design system view with copy-to-clipboard color codes
+6. Persists the result and gives the user a shareable link
 
-## The problem
+## AI approach and architecture
 
-Creative professionals spend hours — sometimes days — building initial concept boards. Existing tools either:
+**Primary development tool:** IBM Bob (used for code generation, refactoring, and project scaffolding throughout the build)
 
-- Require you to *already know* the visual language (Figma, Adobe)
-- Generate generic images that miss the brief (stock photo sites)
-- Need expensive monthly subscriptions (Miro, Milanote)
+**LLM — creative direction:** Meta Llama 3.3 70B Instruct via Hugging Face's OpenAI-compatible router (`router.huggingface.co/v1/chat/completions`)
+- Strict JSON schema via system prompt; Zod-validated on the server
+- Single-pass generation with deterministic temperature (0.7) for creative-but-coherent output
+- System prompt lives in `lib/prompts/creativeStrategy.ts`
 
-AI image generators can produce visuals, but they don't think like a creative director. They don't tell you *why* certain colors work, *what typography* matches the mood, or *how* to apply the system across a campaign.
+**LLM — palette and typography rationale:** Same Llama 3.3 endpoint, separate specialized prompt in `lib/prompts/designSystem.ts`
+- Pulls colors and font pairings out of the creative direction
+- Returns per-color role and per-font rationale
 
-## The solution
+**Image generation:** [Pollinations.ai](https://pollinations.ai) (Flux model) — free, no key required
+- Each reference image is generated from the visual language + a per-image prompt derived from the concept
+- Direct URL fetch, no SDK
 
-ConceptKit combines a **language model** with **structured design thinking**:
+**Storage:** Filesystem JSON in `.next/cache/conceptkit/` (dev) or `/tmp/conceptkit/` (Vercel serverless) — see `lib/store.ts`
 
-1. **Creative Strategy** — A senior strategist's brief. Concept, tone, audience, narrative angle.
-2. **Design System** — A complete palette (5 colors with roles), typography pairing, motion language, do/don't rules.
-3. **Hero Imagery** — Three AI-generated images that embody the concept.
-
-The result: a shareable, opinionated creative concept you can hand to a designer, pitch to a client, or use as a starting point.
-
-## AI approach & architecture
+**Architecture diagram:**
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                        User Input                            │
-│              "Cyberpunk ramen bar in Tokyo"                  │
-└──────────────────────────┬───────────────────────────────────┘
-                           │
-                           ▼
-┌──────────────────────────────────────────────────────────────┐
-│                  Next.js API Route                           │
-│                  /api/generate                               │
-└──────┬───────────────────────────────────┬───────────────────┘
-       │                                   │
-       │  Strategy & Design System         │  Image Prompts
-       ▼                                   ▼
-┌──────────────────────┐         ┌──────────────────────────┐
-│   LLM (Granite 3B)   │         │  Pollinations.ai         │
-│   via HF Inference   │         │  (FLUX image gen)        │
-│                      │         │                          │
-│   Structured JSON    │         │  3 hero images           │
-│   with strict schema │         │  per concept             │
-└──────┬───────────────┘         └──────────┬───────────────┘
-       │                                   │
-       └──────────────┬────────────────────┘
-                      ▼
-         ┌────────────────────────────┐
-         │   Unified Concept JSON     │
-         │   Rendered to moodboard    │
-         └────────────┬───────────────┘
-                      │
-                      ▼
-            ┌──────────────────┐
-            │  Shareable Page  │
-            │  /c/[id]         │
-            └──────────────────┘
+User input (1 line)
+       │
+       ▼
+┌──────────────────┐
+│  Next.js API     │
+│  /api/generate   │
+└──────────────────┘
+       │
+       ├─► HF Router (Llama 3.3 70B) ──► Creative direction JSON
+       ├─► HF Router (Llama 3.3 70B) ──► Palette + typography rationale
+       └─► Pollinations.ai (Flux)  ──► 4 reference images
+       │
+       ▼
+┌──────────────────┐
+│  Zod validation  │
+│  + persistence   │ ──► /c/{id} shareable URL
+└──────────────────┘
+       │
+       ▼
+┌──────────────────┐
+│  React frontend  │
+│  ConceptResult   │
+│  view            │
+└──────────────────┘
 ```
 
-### Key design decisions
+## Challenge fit
 
-- **Two-pass generation** — strategy first, then design system that *references* the strategy. This produces more coherent results than one-shot prompts.
-- **Structured output enforcement** — strict JSON schema with retries on parse failure. No `null` fields shipped to the UI.
-- **Free-tier friendly** — runs on Hugging Face Inference (Llama 3.3 70B) + Pollinations.ai. No paid API keys required.
-- **Client-rendered moodboard** — the shareable `/c/[id]` page works without server-side state, so judges can click any concept URL and see the full board.
+This directly addresses the *Reimagine Creative Industries with AI* theme:
 
-## Tech stack
+- ✅ **AI creative partner** — ConceptKit *is* an AI creative partner
+- ✅ **Storytelling and content creation tools** — every concept includes a voice and mood
+- ✅ **Creative ideation and brainstorming platforms** — the *first* step of any project
+- ✅ **Personalized creative assistants** — adapts to any domain the user describes
+- ✅ **AI-powered design and visual concept tools** — outputs a complete visual system
 
-| Layer | Technology |
+It answers the brief's three core questions:
+
+| Brief question | How ConceptKit answers it |
 |---|---|
-| **Framework** | Next.js 14 (App Router) |
-| **UI** | React, Tailwind CSS, Lucide icons |
-| **Language Model** | Llama 3.3 70B (Hugging Face Inference) |
-| **Image Generation** | Pollinations.ai (FLUX) |
-| **Storage** | Browser localStorage (concepts persist client-side) |
-| **Deployment** | Vercel |
-| **Primary Dev Tool** | **IBM Bob** |
-
-## Selected challenge theme
-
-**July Challenge: Reimagine Creative Industries with AI**
-
-ConceptKit directly addresses every "Think About" prompt in the challenge brief:
-
-- ✅ **AI enhances creativity** — acts as a creative partner, not just a generator
-- ✅ **AI helps people create faster** — concept in 8 seconds vs. 8 hours
-- ✅ **AI unlocks new creative experiences** — the strategy layer is something no other tool does
-- ✅ **Bridges the gap between imagination and execution** — outputs are opinionated, ready to use
-- ✅ **AI as a creative partner** — explains *why* each design choice was made
+| How can AI enhance creativity? | It removes the blank-page problem — gives you a *direction*, not a *result* |
+| How can AI help people create faster? | 30–90 minutes of moodboard work → under 10 seconds |
+| How can AI act as a creative partner rather than simply a content generator? | Outputs are starting points with rationale, not final assets — the human still curates |
 
 ## How IBM Bob was used
 
-Bob was the primary development tool across the entire build:
+IBM Bob was the **primary development tool** for this project. It was used for:
 
-- **Scaffolding** — generated the Next.js project structure, API routes, and Tailwind config
-- **Component generation** — built the React components (ConceptForm, ConceptResult, EmptyState, LoadingSkeleton) with spec-driven prompts
-- **Prompt engineering** — iterated on the LLM system prompts (`lib/prompts/creativeStrategy.ts`, `lib/prompts/designSystem.ts`) to enforce the strict JSON schema
-- **Debugging** — fixed type errors, hydration issues, and edge cases in the rendering pipeline
-- **Documentation** — wrote the architecture docs and the README
+- **Project scaffolding** — initial Next.js 14 + TypeScript + Tailwind structure
+- **Component generation** — `ConceptForm`, `ConceptResult`, `LoadingSkeleton`, `EmptyState`, `ErrorState`
+- **Prompt engineering** — iterating on the creative-direction system prompt to enforce strict JSON output
+- **Refactoring** — splitting the monolithic generate route into composable prompt modules
+- **Security patches** — Next.js 14.2.5 → 14.2.35 (CVE-2025-55183, CVE-2025-55184, CVE-2025-67779)
+- **Debugging** — diagnosing the Vercel filesystem storage issue and routing fix
 
-The full commit history shows Bob-driven development from initial scaffold to final polish.
+Bob was used as a **pair-programming collaborator** — every architectural decision and every line of complex logic was reviewed and understood before being committed.
 
-## Run locally
+## Tech stack
+
+| Layer | Choice | Why |
+|---|---|---|
+| Framework | Next.js 14 (App Router) | Server components for the share view, route handlers for the API |
+| Language | TypeScript (strict) | Catches schema mismatches at compile time |
+| Styling | Tailwind CSS | Fast iteration on the design-system view |
+| LLM | Meta Llama 3.3 70B (HF Router) | Free, OpenAI-compatible, strong at structured JSON |
+| Image gen | Pollinations.ai (Flux) | Free, no key, fast enough for live demo |
+| Storage | Filesystem JSON | Zero-config, works on Vercel serverless in `/tmp` |
+| Icons | lucide-react | Lightweight, consistent |
+| Deployment | Vercel | Zero-config Next.js hosting |
+
+## Getting started
 
 ```bash
-git clone https://github.com/realwarp/conceptkit.git
+git clone https://github.com/realwarp/conceptkit
 cd conceptkit
 npm install
-cp .env.example .env.local   # add your HF_API_KEY (free at huggingface.co)
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3000](http://localhost:3000), type a concept, hit generate.
+
+No API keys required — Pollinations is keyless and the HF Router has a generous free tier.
+
+## Project structure
+
+```
+app/
+├── api/
+│   └── generate/route.ts   # POST endpoint, orchestrates LLM + image gen
+├── c/[id]/page.tsx         # Shareable concept view
+├── layout.tsx              # Root layout
+├── page.tsx                # Home — input form
+└── globals.css
+components/
+├── ConceptForm.tsx         # Input form + submit handler
+├── ConceptResult.tsx       # Main result view (palette, type, images, etc.)
+├── EmptyState.tsx
+├── ErrorState.tsx
+└── LoadingSkeleton.tsx
+lib/
+├── prompts/
+│   ├── creativeStrategy.ts # LLM prompt for the core creative direction
+│   └── designSystem.ts     # LLM prompt for palette + typography
+├── store.ts                # Filesystem JSON storage
+└── types.ts                # ConceptResult, Color, Typography, etc.
+```
 
 ## Submission
 
-- **Challenge:** July 2026 — Reimagine Creative Industries with AI
-- **Team:** Solo
-- **Demo video:** [link to be added]
-- **SkillsBuild certificate:** [on file, uploaded to submission platform]
-- **Submitted via:** [BeMyApp platform link]
+- **Hackathon:** IBM AI Builders Challenge — July 2026
+- **Challenge theme:** *Reimagine Creative Industries with AI*
+- **Deadline:** July 31, 2026, 11:59 PM ET
+- **Demo video:** [link to be added before submission]
+- **Submission page:** [BeMyApp platform link]
 
 ## License
 
