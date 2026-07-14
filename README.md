@@ -1,179 +1,218 @@
 # ConceptKit
 
-> Your AI creative director. Turn a single sentence into a full visual concept - palette, typography, mood, voice, and reference imagery - in under 10 seconds.
+> Your creative system, in seconds.
 
-![ConceptKit hero concept](app/8b8b76ff-fc95-4809-925e-8c798d115299.png)
+ConceptKit is an AI creative director that turns a single one-line brief into a complete brand direction: mood, audience, color palette, typography pairing, brand voice, and a cinematic reference image — all exportable as PNG and shareable as a link.
 
-ConceptKit is built for the **IBM AI Builders Challenge (July 2026)** under the *"Reimagine Creative Industries with AI"* theme. It is an AI creative partner for designers, filmmakers, marketers, and indie builders who need to go from a vague idea to a coherent visual direction without opening Figma, Pinterest, or five browser tabs.
+Built for the **IBM AI Builders Challenge · July 2026** (Theme: *Reimagine Creative Industries with AI*).
+
+---
+
+## Why it exists
+
+The first 30 minutes of any creative project are the worst. Open Figma, scroll Pinterest, second-guess the mood, pick a hex from a saved swatch, change it, repeat. By the time you start building, you've lost the energy.
+
+ConceptKit collapses that 30 minutes into **one prompt and a 10-second wait**. You walk away with a coherent direction — not inspiration, a direction you can actually build from.
+
+---
 
 ## What it does
 
-Give ConceptKit a one-line idea. It returns a **complete creative direction**:
+Drop in a one-liner like `Noir detective film set in 1960s Tokyo, rain-soaked neon`. ConceptKit returns:
 
-- **Brand summary** - one paragraph framing the concept
-- **Brand personality** - 3–5 adjectives that guide every visual decision
-- **Audience** - who the concept is for and how it speaks to them
-- **Mood keywords** - 5 single words that anchor the vibe
-- **Visual language** - concrete aesthetic direction (e.g. *"editorial, soft grain, generous negative space"*)
-- **Color palette** - 5 hex colors with semantic roles (primary / secondary / accent / neutral / background) and a rationale for each
-- **Typography pairing** - heading + body fonts with a reason for the choice
-- **Voice** - how the brand writes
-- **Reference images** - 4 AI-generated mood images, each with the prompt used to create it
+| Output | Detail |
+| --- | --- |
+| **Brand summary** | A 1–2 sentence distillation of the concept. |
+| **Mood keywords** | 3–5 chips (e.g. *Gritty · Sophisticated · Mysterious*). |
+| **Personality** | 3–4 traits (`Gritty`, `Sophisticated`, `Mysterious`…). |
+| **Audience** | One-line description of who this is for. |
+| **Color palette** | 5 hex codes with semantic roles (primary, secondary, accent, neutral, background) + per-color rationale. Click-to-copy. |
+| **Typography** | Heading + body Google Font pair with rationale + pairing logic. |
+| **Brand voice** | A 1–2 sentence stylistic directive (rendered in the heading font). |
+| **Visual language** | Free-form prose on visual treatment, composition, mood. |
+| **Hero image** | A cinematic reference image, generated to match the brief, with retry-on-fail. |
+| **Export PNG** | A pixel-2x rendered board of the whole direction, ready to drop into a deck. |
+| **Share link** | URL-encoded concept — no DB, no login, just a link. |
 
-Every concept is shareable via a unique URL (e.g. `/c/aB3xYkL9mN`).
+---
 
-## Problem
-
-Creative professionals spend 30–90 minutes on the *first step* of any project: building a moodboard. They bounce between Pinterest, Dribbble, Google Fonts, Coolors, and image generators, copy-pasting hex codes into a Google Doc, then rewriting the brief because the fonts don't match the palette. ConceptKit compresses that workflow into a single prompt and a single page.
-
-## Solution
-
-ConceptKit is a single-page web app that:
-
-1. Takes a natural-language concept (e.g. *"a quiet productivity app for people who hate productivity apps"*)
-2. Sends a structured prompt to an LLM that returns a strict JSON schema
-3. Validates the schema, then enriches each item with rationale and visual reasoning
-4. Generates 4 reference images via Pollinations.ai (Flux model) using the visual language
-5. Renders a unified design system view with copy-to-clipboard color codes
-6. Persists the result and gives the user a shareable link
-
-## AI approach and architecture
-
-**Primary development tool:** IBM Bob (used for code generation, refactoring, and project scaffolding throughout the build)
-
-**LLM - creative direction:** Meta Llama 3.3 70B Instruct via Hugging Face's OpenAI-compatible router (`router.huggingface.co/v1/chat/completions`)
-- Strict JSON schema via system prompt; Zod-validated on the server
-- Single-pass generation with deterministic temperature (0.7) for creative-but-coherent output
-- System prompt lives in `lib/prompts/creativeStrategy.ts`
-
-**LLM - palette and typography rationale:** Same Llama 3.3 endpoint, separate specialized prompt in `lib/prompts/designSystem.ts`
-- Pulls colors and font pairings out of the creative direction
-- Returns per-color role and per-font rationale
-
-**Image generation:** [Pollinations.ai](https://pollinations.ai) (Flux model) - free, no key required
-- Each reference image is generated from the visual language + a per-image prompt derived from the concept
-- Direct URL fetch, no SDK
-
-**Storage:** Filesystem JSON in `.next/cache/conceptkit/` (dev) or `/tmp/conceptkit/` (Vercel serverless) - see `lib/store.ts`
-
-**Architecture diagram:**
+## How it works (architecture)
 
 ```
-User input (1 line)
-       │
-       ▼
-┌──────────────────┐
-│  Next.js API     │
-│  /api/generate   │
-└──────────────────┘
-       │
-       ├─► HF Router (Llama 3.3 70B) ──► Creative direction JSON
-       ├─► HF Router (Llama 3.3 70B) ──► Palette + typography rationale
-       └─► Pollinations.ai (Flux)  ──► 4 reference images
-       │
-       ▼
-┌──────────────────┐
-│  Zod validation  │
-│  + persistence   │ ──► /c/{id} shareable URL
-└──────────────────┘
-       │
-       ▼
-┌──────────────────┐
-│  React frontend  │
-│  ConceptResult   │
-│  view            │
-└──────────────────┘
+┌──────────────┐         ┌──────────────────┐
+│  Next.js UI  │  POST   │ /api/generate    │
+│  /app/page   │────────▶│  (Node runtime)  │
+└──────────────┘         └────────┬─────────┘
+                                 │
+                  ┌──────────────┴──────────────┐
+                  ▼                             ▼
+        ┌──────────────────┐         ┌──────────────────┐
+        │  STAGE 1:        │         │  STAGE 2:        │
+        │  Creative        │ ──────▶ │  Design System   │
+        │  Strategy        │ context │  (palette +      │
+        │  (LLM call 1)    │         │   typography)    │
+        └──────────────────┘         └────────┬─────────┘
+                                              │
+                                              ▼
+                                    ┌────────────────────┐
+                                    │  Image generation  │
+                                    │  (parallel,        │
+                                    │   retry-on-fail)   │
+                                    └────────┬───────────┘
+                                             ▼
+                                    ┌────────────────────┐
+                                    │  Validation +      │
+                                    │  Sanitization      │
+                                    │  (zod + hex check)  │
+                                    └────────┬───────────┘
+                                             ▼
+                                    ┌────────────────────┐
+                                    │  Share encoding    │
+                                    │  (lz-string +      │
+                                    │   URL state)       │
+                                    └────────────────────┘
 ```
 
-## Challenge fit
+### Why a 2-stage LLM pipeline?
 
-This directly addresses the *Reimagine Creative Industries with AI* theme:
+A single-prompt design ask usually fails at one of two things: the colors don't match the concept, or the typography doesn't match the colors. The fix is to **separate strategy from execution**.
 
-- ✅ **AI creative partner** - ConceptKit *is* an AI creative partner
-- ✅ **Storytelling and content creation tools** - every concept includes a voice and mood
-- ✅ **Creative ideation and brainstorming platforms** - the *first* step of any project
-- ✅ **Personalized creative assistants** - adapts to any domain the user describes
-- ✅ **AI-powered design and visual concept tools** - outputs a complete visual system
+**Stage 1 — Creative Strategy** (`lib/prompts/creativeStrategy.ts`)
+The LLM only reasons about *what the concept wants*. No hex codes, no font names — just mood, narrative, audience, visual intent. Output is a strategic foundation that a human creative director would have produced in a 30-min brainstorm.
 
-It answers the brief's three core questions:
+**Stage 2 — Design System** (`lib/prompts/designSystem.ts`)
+The Stage 1 strategy is injected as context. Only now does the LLM pick palette + typography — and it picks them *based on a defined strategy*, not vibes. Output is constrained to real hex codes and real Google Font names.
 
-| Brief question | How ConceptKit answers it |
-|---|---|
-| How can AI enhance creativity? | It removes the blank-page problem - gives you a *direction*, not a *result* |
-| How can AI help people create faster? | 30–90 minutes of moodboard work → under 10 seconds |
-| How can AI act as a creative partner rather than simply a content generator? | Outputs are starting points with rationale, not final assets - the human still curates |
+Each stage validates its own output. Bad palette → retry. Unmappable fonts → retry. The result is a direction that holds together.
 
-## How IBM Bob was used
+### Image proxy (`/api/image-proxy`)
 
-IBM Bob was the **primary development tool** for this project. It was used for:
+Reference images are external URLs (FLUX). For PNG export via `html-to-image`, the canvas would taint on cross-origin. The proxy fetches upstream, sets `Access-Control-Allow-Origin: *`, and serves a 24h-cached version. Export works every time, no CORS error.
 
-- **Project scaffolding** - initial Next.js 14 + TypeScript + Tailwind structure
-- **Component generation** - `ConceptForm`, `ConceptResult`, `LoadingSkeleton`, `EmptyState`, `ErrorState`
-- **Prompt engineering** - iterating on the creative-direction system prompt to enforce strict JSON output
-- **Refactoring** - splitting the monolithic generate route into composable prompt modules
-- **Security patches** - Next.js 14.2.5 → 14.2.35 (CVE-2025-55183, CVE-2025-55184, CVE-2025-67779)
-- **Debugging** - diagnosing the Vercel filesystem storage issue and routing fix
+### Share links (`lib/share.ts`)
 
-Bob was used as a **pair-programming collaborator** - every architectural decision and every line of complex logic was reviewed and understood before being committed.
+The whole concept is lz-string-compressed and base64-encoded into the URL. **`/c/<id>` doesn't hit the filesystem** — it decodes the URL state. No database, no auth, no expiry. Works offline once loaded.
 
-## Tech stack
+### Validation + sanitization
 
-| Layer | Choice | Why |
-|---|---|---|
-| Framework | Next.js 14 (App Router) | Server components for the share view, route handlers for the API |
-| Language | TypeScript (strict) | Catches schema mismatches at compile time |
-| Styling | Tailwind CSS | Fast iteration on the design-system view |
-| LLM | Meta Llama 3.3 70B (HF Router) | Free, OpenAI-compatible, strong at structured JSON |
-| Image gen | Pollinations.ai (Flux) | Free, no key, fast enough for live demo |
-| Storage | Filesystem JSON | Zero-config, works on Vercel serverless in `/tmp` |
-| Icons | lucide-react | Lightweight, consistent |
-| Deployment | Vercel | Zero-config Next.js hosting |
+- Hex codes are regex-validated. Bad ones get a deterministic fallback.
+- Font families are checked against a whitelist of Google Fonts. Unknown names get a sane default.
+- Color roles are always emitted in a stable order: primary, secondary, accent, neutral, background.
 
-## Getting started
+### UI state machine
+
+Four states, no surprises: `idle → loading → success | error`. Each state has its own component (`EmptyState`, `LoadingSkeleton`, `ConceptResult`, `ErrorState`). No half-broken intermediate renders.
+
+---
+
+## Stack
+
+- **Next.js 14** (App Router, Node runtime for routes)
+- **TypeScript 5.5** (strict)
+- **Tailwind 3.4** + custom design tokens
+- **Framer Motion 12** — staggered fade-up reveals on the result card
+- **lucide-react** — icon set
+- **html-to-image** — DOM-to-PNG export
+- **nanoid** — concept IDs
+- **lz-string** — URL-state compression for share links
+
+No client state library. No router library. No design system package. The whole UI is plain React + Tailwind.
+
+---
+
+## Repo layout
+
+```
+conceptkit/
+├── app/
+│   ├── page.tsx               # Home: form + result + sample prompts
+│   ├── c/[id]/page.tsx        # Read-only shared view (decodes URL state)
+│   ├── api/
+│   │   ├── generate/route.ts  # POST: 2-stage LLM + image generation
+│   │   └── image-proxy/route.ts  # GET: CORS proxy for export
+│   ├── globals.css            # Tokens + component classes
+│   └── layout.tsx
+├── components/
+│   ├── ConceptForm.tsx        # Prompt input + submit
+│   ├── ConceptResult.tsx      # The whole result board (export target)
+│   ├── EmptyState.tsx         # Sample prompts
+│   ├── LoadingSkeleton.tsx    # Loading state
+│   └── ErrorState.tsx         # Error + retry
+├── lib/
+│   ├── types.ts               # ConceptResult, Color, Typography, …
+│   ├── share.ts               # lz-string encode/decode for /c/[id]
+│   ├── store.ts               # Optional server-side concept persistence
+│   └── prompts/
+│       ├── creativeStrategy.ts  # Stage 1 prompt
+│       └── designSystem.ts      # Stage 2 prompt + types
+├── tailwind.config.ts
+├── next.config.mjs
+├── tsconfig.json
+└── package.json
+```
+
+---
+
+## Run it locally
 
 ```bash
-git clone https://github.com/realwarp/conceptkit
-cd conceptkit
+# 1. Install
 npm install
-npm run dev
+
+# 2. Set up env
+#    Create .env.local with your model provider keys.
+#    See "Environment" below for the exact variable names.
+
+# 3. Dev server
+npm run dev          # http://localhost:3000
+
+# 4. Production build
+npm run build
+npm start
 ```
 
-Open [http://localhost:3000](http://localhost:3000), type a concept, hit generate.
+### Environment
 
-No API keys required - Pollinations is keyless and the HF Router has a generous free tier.
+| Var | What it does |
+| --- | --- |
+| `LLM_API_KEY` | Stage 1 + Stage 2 model API key. |
+| `LLM_MODEL` | (Optional) Model name. Defaults to a fast, instruction-following model. |
+| `IMAGE_API_KEY` | Image-generation provider key. |
+| `IMAGE_MODEL` | (Optional) Defaults to a cinematic image model. |
 
-## Project structure
+ConceptKit is model-agnostic on purpose — both LLM and image stages accept any provider that can hit the prompts. Pick the cheapest combination that hits the quality bar.
 
-```
-app/
-├── api/
-│   └── generate/route.ts   # POST endpoint, orchestrates LLM + image gen
-├── c/[id]/page.tsx         # Shareable concept view
-├── layout.tsx              # Root layout
-├── page.tsx                # Home - input form
-└── globals.css
-components/
-├── ConceptForm.tsx         # Input form + submit handler
-├── ConceptResult.tsx       # Main result view (palette, type, images, etc.)
-├── EmptyState.tsx
-├── ErrorState.tsx
-└── LoadingSkeleton.tsx
-lib/
-├── prompts/
-│   ├── creativeStrategy.ts # LLM prompt for the core creative direction
-│   └── designSystem.ts     # LLM prompt for palette + typography
-├── store.ts                # Filesystem JSON storage
-└── types.ts                # ConceptResult, Color, Typography, etc.
-```
+---
 
-## Submission
+## Key design decisions
 
-- **Hackathon:** IBM AI Builders Challenge - July 2026
-- **Challenge theme:** *Reimagine Creative Industries with AI*
-- **Deadline:** July 31, 2026, 11:59 PM ET
-- **Demo video:** [link to be added before submission]
-- **Submission page:** [BeMyApp platform link]
+- **2 stages, not 1.** A single-prompt design ask fails at coherence. Separating strategy from execution is the only way to get a direction that *holds together*.
+- **No DB.** Share links are URL state. The whole thing works on a serverless deploy with zero persistence.
+- **No client state library.** Four states. One `useState` machine. Done.
+- **Result card is a single export target.** One `ref`, one `toPng()` call, the whole board downloads at 2x.
+- **Image retry on the client.** FLUX is slow and occasionally times out. Three retries with exponential backoff, then a graceful "image unavailable" fallback that still shows the prompt.
+- **Color roles, not just hex codes.** A palette is *primary, secondary, accent, neutral, background* — not a bag of pretty colors. The role names make the palette reusable in Figma without translation.
+- **Type-safe end-to-end.** The API returns exactly `ConceptResult`. The component consumes exactly `ConceptResult`. No `any`, no `Record<string, unknown>` leaks.
+
+---
+
+## What I learned building it
+
+1. **Most "AI design tools" give you a vibe. ConceptKit gives you a direction.** The difference is that a direction has structure — palette roles, font rationale, voice, audience — not just colors and a logo.
+2. **Stage separation is the whole game.** A single LLM call that tries to do strategy + design in one shot will always be incoherent. Two calls, one focused on each, produces something you'd actually use.
+3. **DOM-to-PNG is way easier than canvas-from-scratch.** If your export target is the actual rendered UI, you get fonts, gradients, and responsive layout for free. The only gotcha is CORS, which is what the proxy is for.
+4. **URL state is underrated.** `/c/<id>` with lz-string-encoded state means no DB, no auth, no expiry, and the link works in any chat app. The same trick scales to everything from blog posts to bug reports.
+
+---
 
 ## License
 
-MIT
+MIT.
+
+## Credits
+
+Built by Ashwin Shelke for the [IBM AI Builders Challenge](https://ibm.biz/ai-builders-challenge), July 2026.
+
+- IBM Bob — primary AI dev tool (per challenge requirement)
+- IBM SkillsBuild — required learning activity completion
+- IBM Granite + watsonx — recommended technologies
