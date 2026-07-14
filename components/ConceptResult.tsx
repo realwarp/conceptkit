@@ -107,7 +107,7 @@ const fadeUp = {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 type ConceptResultProps = {
-  result: ConceptResult;
+  result: ConceptResult & { shareId?: string };
   readOnly?: boolean;
   onReset?: () => void;
 };

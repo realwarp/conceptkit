@@ -1,92 +1,48 @@
-/**
- * Stage 2 — Design System
- *
- * Purpose: consume the Creative Strategy and translate it into
- * specific, production-quality design decisions: exact HEX palette,
- * professional Google Font pairing, and the hero image prompt.
- *
- * This stage has access to the strategy context, so every decision
- * is grounded in the creative intent established in Stage 1.
- */
-
-import type { CreativeStrategy } from "./creativeStrategy";
-
 export type DesignSystem = {
-  palette: Array<{ hex: string; role: "primary" | "secondary" | "accent" | "neutral" | "background" }>;
-  typography: { heading: string; body: string; rationale: string };
+  palette: Array<{ role: string; hex: string; rationale: string }>;
+  typography: {
+    heading: { family: string; rationale: string };
+    body: { family: string; rationale: string };
+    pairing: string;
+  };
   imagePrompt: string;
 };
 
-/**
- * Build the Design System prompt, injecting the Creative Strategy
- * so the LLM has full context for every decision.
- */
-export function buildDesignSystemPrompt(strategy: CreativeStrategy): string {
-  return `You are a principal product designer and art director.
+export function buildDesignSystemPrompt(
+  visualLanguage: string,
+  moodKeywords: string[],
+  brandPersonality: string[],
+): { system: string; user: string } {
+  const system = `You are a senior brand designer. Produce a tight, opinionated design system for the supplied creative direction. Output strict JSON matching the schema. No prose, no markdown, no commentary.`;
 
-You have been given this creative strategy:
+  const user = `Creative direction to translate into a design system:
+- Visual language: ${visualLanguage}
+- Mood keywords: ${moodKeywords.join(", ")}
+- Brand personality: ${brandPersonality.join(", ")}
 
-CATEGORY: ${strategy.category}
-TITLE: ${strategy.title}
-SUMMARY: ${strategy.summary}
-PALETTE MOOD: ${strategy.paletteMood}
-TYPOGRAPHY MOOD: ${strategy.typographyMood}
-VISUAL LANGUAGE: ${strategy.visualLanguage}
-MOOD KEYWORDS: ${strategy.moodKeywords.join(", ")}
-
-Your task: translate this creative strategy into precise design decisions.
-
-PALETTE RULES:
-- Produce exactly 5 colors with roles: primary, secondary, accent, neutral, background
-- Colors must directly embody the paletteMood described above
-- Strong contrast between background and primary — minimum 4.5:1 ratio
-- Each color must serve a distinct visual purpose — no two shades that look the same
-- Accent must be genuinely distinctive against background and primary
-- No muddy grays unless the strategy explicitly calls for them
-- For dark themes: background hex should be very dark (#0a–#1a range)
-- For light themes: background hex should be near-white (#f0–#ff range)
-
-TYPOGRAPHY RULES:
-- Use ONLY real Google Fonts (verified to exist at fonts.google.com)
-- heading and body must be DIFFERENT fonts — never identical
-- Match the typographyMood precisely
-- Category-specific guidance:
-  UI / Product: geometric sans (Inter, DM Sans, Geist, Space Grotesk, Outfit, Plus Jakarta Sans)
-  Branding / Identity: expressive display (Playfair Display, Bebas Neue, Archivo Black, Syne, Monument Extended) + clean body
-  Spatial / Interior: humanist serif (Cormorant Garamond, Libre Baskerville) + sans (Source Sans 3, Nunito)
-  Editorial / Print: editorial serif (Playfair Display, Lora, DM Serif Display) + mono or condensed (IBM Plex Mono, Barlow Condensed)
-  Photography / Cinematic: cinematic display (Bebas Neue, Oswald, Anton) + body (Source Sans 3, Inter)
-  Abstract / Conceptual: experimental (Syne, Raleway, Josefin Sans) + humanist body
-  Lifestyle / Consumer: friendly humanist (Nunito, Jost, Poppins) + clean body (Lato, Inter)
-- rationale: MAXIMUM 8 words. State the pairing benefit only. No brand names in rationale.
-  BAD: "Bebas Neue's bold impact pairs with Inter's clarity."
-  GOOD: "Cinematic weight contrast meets systematic clarity."
-
-IMAGE PROMPT RULES:
-- ONE single cinematic landscape-orientation hero image
-- Must visually represent THIS specific concept — not generic
-- Must embody the visual language: ${strategy.visualLanguage}
-- Must reflect the palette mood: ${strategy.paletteMood}
-- Include ALL of: specific subject matter, environment, named lighting technique, color mood, lens/camera style, composition approach
-- 40-60 words
-- Quality bar: Behance / Awwwards editorial photography standard
-- Avoid: generic stock photography, generic nature, abstract gradients (unless explicitly conceptual)
-
-Return ONLY a valid JSON object. No markdown. No code fences. No text outside the JSON.
-
+Return strict JSON with this exact shape:
 {
   "palette": [
-    {"hex": "#RRGGBB", "role": "primary"},
-    {"hex": "#RRGGBB", "role": "secondary"},
-    {"hex": "#RRGGBB", "role": "accent"},
-    {"hex": "#RRGGBB", "role": "neutral"},
-    {"hex": "#RRGGBB", "role": "background"}
+    { "role": "primary",    "hex": "#RRGGBB", "rationale": "One short sentence (<=18 words) explaining why this color serves the role." },
+    { "role": "secondary",  "hex": "#RRGGBB", "rationale": "..." },
+    { "role": "accent",     "hex": "#RRGGBB", "rationale": "..." },
+    { "role": "neutral",    "hex": "#RRGGBB", "rationale": "..." },
+    { "role": "background", "hex": "#RRGGBB", "rationale": "..." }
   ],
   "typography": {
-    "heading": "<Real Google Font — matches typographyMood and category>",
-    "body": "<Real Google Font — different from heading, pairs intentionally>",
-    "rationale": "<max 8 words, pairing benefit only>"
+    "heading": { "family": "Google Font name", "rationale": "One short sentence." },
+    "body":    { "family": "Google Font name", "rationale": "One short sentence." },
+    "pairing": "One short sentence describing how the heading + body work together."
   },
-  "imagePrompt": "<40-60 word cinematic hero image prompt, concept-specific>"
-}`;
+  "imagePrompt": "One short sentence (10-18 words) describing a hero reference image that visualises the mood. No preamble."
+}
+
+Rules:
+- Hex values must be 7-char uppercase #RRGGBB and visually match the mood
+- Choose Google Fonts only (e.g. "Space Grotesk", "Fraunces", "Inter", "DM Serif Display", "Manrope", "Sora", "Playfair Display", "IBM Plex Mono")
+- Heading and body fonts must be different
+- Palette must be internally coherent (no clashing)
+- Return ONLY the JSON object`;
+
+  return { system, user };
 }

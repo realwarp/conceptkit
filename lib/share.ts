@@ -1,29 +1,34 @@
-/**
- * URL-embedded concept sharing.
- *
- * We compress the concept into a URL-safe base64 string and put it
- * directly in the share link. No server storage needed — works on
- * Vercel's ephemeral filesystem.
- */
-
 import type { ConceptResult } from "./types";
 
 const ENC = "base64url" as const;
 
-export function encodeConcept(concept: ConceptResult): string {
-  const json = JSON.stringify(concept);
-  return btoa(json)
+function toBase64Url(input: string): string {
+  if (typeof Buffer !== "undefined") {
+    return Buffer.from(input, "utf8").toString("base64url");
+  }
+  return btoa(unescape(encodeURIComponent(input)))
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=+$/, "");
 }
 
+function fromBase64Url(encoded: string): string {
+  const padded = encoded.replace(/-/g, "+").replace(/_/g, "/");
+  if (typeof Buffer !== "undefined") {
+    return Buffer.from(padded, "base64").toString("utf8");
+  }
+  return decodeURIComponent(escape(atob(padded)));
+}
+
+export function encodeConcept(concept: ConceptResult): string {
+  return toBase64Url(JSON.stringify(concept));
+}
+
 export function decodeConcept(encoded: string): ConceptResult | null {
   try {
-    const padded = encoded.replace(/-/g, "+").replace(/_/g, "/");
-    const json = atob(padded);
+    const json = fromBase64Url(encoded);
     const parsed = JSON.parse(json) as ConceptResult;
-    if (!parsed.id || !parsed.prompt || !parsed.palette) return null;
+    if (!parsed.id || !parsed.palette) return null;
     return parsed;
   } catch {
     return null;

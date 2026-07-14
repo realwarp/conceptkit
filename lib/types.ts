@@ -1,28 +1,31 @@
 export type ColorRole = "primary" | "secondary" | "accent" | "neutral" | "background";
 
 export type Color = {
-  hex: string;
   role: ColorRole;
+  hex: string;
+  rationale: string;
+};
+
+export type FontChoice = {
+  family: string;
+  rationale: string;
 };
 
 export type Typography = {
-  heading: string;
-  body: string;
-  rationale: string;
+  heading: FontChoice;
+  body: FontChoice;
+  pairing: string;
 };
 
 export type ReferenceImage = {
   url: string;
   prompt: string;
-  id: string;
 };
 
 export type ConceptResult = {
   id: string;
-  shareId?: string;
-  createdAt: string;
   prompt: string;
-  summary: string;
+  brandSummary: string;
   brandPersonality: string[];
   audience: string;
   moodKeywords: string[];
@@ -32,3 +35,5 @@ export type ConceptResult = {
   voice: string;
   referenceImages: ReferenceImage[];
 };
+
+export type ConceptResultWithShare = ConceptResult & { shareId?: string };

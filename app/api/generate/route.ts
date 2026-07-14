@@ -1,7 +1,15 @@
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
-import type { Color, ConceptResult } from "@/lib/types";
+import type {
+  Color,
+  ColorRole,
+  ConceptResult,
+  FontChoice,
+  ReferenceImage,
+  Typography,
+} from "@/lib/types";
 import { encodeConcept } from "@/lib/share";
+import { saveConcept } from "@/lib/store";
 import {
   CREATIVE_STRATEGY_PROMPT,
   type CreativeStrategy,
@@ -22,19 +30,20 @@ const FETCH_TIMEOUT_MS = 30_000;
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
 const DEFAULT_PALETTE: Color[] = [
-  { role: "primary",    hex: "#1A1A2E" },
-  { role: "secondary",  hex: "#4A4A6A" },
-  { role: "accent",     hex: "#D4A373" },
-  { role: "neutral",    hex: "#C8C8D8" },
-  { role: "background", hex: "#0A0A12" },
+  { role: "primary",    hex: "#1A1A2E", rationale: "Default anchor color used when palette enrichment fails." },
+  { role: "secondary",  hex: "#4A4A6A", rationale: "Default supporting tone used when palette enrichment fails." },
+  { role: "accent",     hex: "#D4A373", rationale: "Default highlight color used when palette enrichment fails." },
+  { role: "neutral",    hex: "#C8C8D8", rationale: "Default quiet tone used when palette enrichment fails." },
+  { role: "background", hex: "#0A0A12", rationale: "Default surface color used when palette enrichment fails." },
 ];
 
-// ─── LLM caller — shared by both stages ──────────────────────────────────────
+const VALID_ROLES: ColorRole[] = ["primary", "secondary", "accent", "neutral", "background"];
+
+// ─── LLM caller ──────────────────────────────────────────────────────────────
 
 async function callLlm(
   apiKey: string,
-  systemPrompt: string,
-  userMessage: string,
+  prompts: { system: string; user: string },
   maxTokens: number
 ): Promise<string> {
   const controller = new AbortController();
@@ -51,11 +60,11 @@ async function callLlm(
       body: JSON.stringify({
         model: HF_MODEL,
         messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user",   content: userMessage },
+          { role: "system", content: prompts.system },
+          { role: "user", content: prompts.user },
         ],
-        max_tokens: maxTokens,
         temperature: 0.7,
+        max_tokens: maxTokens,
         response_format: { type: "json_object" },
       }),
       signal: controller.signal,
@@ -109,22 +118,62 @@ function sanitizeWords(v: unknown, min: number, max: number, fallback: string[])
   return words.length >= min ? words : fallback;
 }
 
+function isColorRole(v: unknown): v is ColorRole {
+  return typeof v === "string" && (VALID_ROLES as string[]).includes(v);
+}
+
 function sanitizePalette(v: unknown): Color[] {
   if (!Array.isArray(v)) return DEFAULT_PALETTE;
 
-  const byRole = new Map<Color["role"], string>();
+  const byRole = new Map<ColorRole, string>();
   for (const item of v) {
     if (!item || typeof item !== "object") continue;
-    const { role, hex } = item as { role?: string; hex?: string };
-    if (!role || !hex) continue;
+    const { role, hex } = item as { role?: unknown; hex?: unknown };
+    if (!isColorRole(role) || typeof hex !== "string") continue;
     if (!HEX_RE.test(hex)) continue;
-    byRole.set(role as Color["role"], hex.toUpperCase());
+    byRole.set(role, hex.toUpperCase());
   }
 
-  return DEFAULT_PALETTE.map((c) => ({
-    role: c.role,
-    hex: byRole.get(c.role) ?? c.hex,
-  }));
+  return DEFAULT_PALETTE.map((c) => {
+    const override = byRole.get(c.role);
+    return {
+      role: c.role,
+      hex: override ?? c.hex,
+      rationale: override
+        ? `AI selected ${c.role} tone for the concept.`
+        : c.rationale,
+    };
+  });
+}
+
+function sanitizeFont(v: unknown, fallbackFamily: string): FontChoice {
+  if (v && typeof v === "object") {
+    const r = v as Record<string, unknown>;
+    return {
+      family: sanitizeString(r.family, fallbackFamily),
+      rationale: sanitizeString(r.rationale, ""),
+    };
+  }
+  return {
+    family: sanitizeString(v, fallbackFamily),
+    rationale: "",
+  };
+}
+
+function sanitizeTypography(v: unknown): Typography {
+  if (!v || typeof v !== "object") {
+    return {
+      heading: { family: "Playfair Display", rationale: "Default display font for fallback." },
+      body: { family: "Inter", rationale: "Default body font for fallback." },
+      pairing: "Expressive display meets clean body.",
+    };
+  }
+  const t = v as Record<string, unknown>;
+  return {
+    heading: sanitizeFont(t.heading, "Playfair Display"),
+    body: sanitizeFont(t.body, "Inter"),
+    pairing: sanitizeString(t.pairing, "Expressive display meets clean body."),
+  };
 }
 
 // ─── Stage 1: Creative Strategy ──────────────────────────────────────────────
@@ -139,14 +188,13 @@ async function runCreativeStrategy(
     try {
       const raw = await callLlm(
         apiKey,
-        CREATIVE_STRATEGY_PROMPT,
-        `Concept: ${concept}\n\nRespond with the JSON object only.`,
-        1200
+        { system: CREATIVE_STRATEGY_PROMPT, user: concept },
+        900
       );
 
       const p = extractJson(raw);
 
-      const strategy: CreativeStrategy = {
+      return {
         category:         sanitizeString(p.category,         "UI / Product"),
         title:            sanitizeString(p.title,            "Untitled Concept"),
         summary:          sanitizeString(p.summary,          "A focused creative direction."),
@@ -158,8 +206,6 @@ async function runCreativeStrategy(
         typographyMood:   sanitizeString(p.typographyMood,   "Geometric sans-serif for clarity and modernity."),
         voice:            sanitizeString(p.voice,            "Built for clarity. Designed for focus."),
       };
-
-      return strategy;
     } catch (err) {
       lastError = err;
       if (attempt === 1) break;
@@ -183,33 +229,21 @@ async function runDesignSystem(
 
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const raw = await callLlm(
-        apiKey,
-        buildDesignSystemPrompt(strategy),
-        "Produce the design system JSON now.",
-        900
-      );
-
+      const prompts = buildDesignSystemPrompt(strategy);
+      const raw = await callLlm(apiKey, prompts, 900);
       const p = extractJson(raw);
 
-      // Extract imagePrompt — support both singular and plural key
       const imagePrompt = sanitizeString(
         (p.imagePrompt as unknown) ??
           (Array.isArray(p.imagePrompts) ? (p.imagePrompts as string[])[0] : ""),
         `${strategy.title}. ${strategy.visualLanguage} Cinematic landscape, editorial photography.`
       );
 
-      const ds: DesignSystem = {
+      return {
         palette: sanitizePalette(p.palette),
-        typography: {
-          heading:  sanitizeString((p.typography as Record<string, unknown>)?.heading,   "Playfair Display"),
-          body:     sanitizeString((p.typography as Record<string, unknown>)?.body,      "Inter"),
-          rationale:sanitizeString((p.typography as Record<string, unknown>)?.rationale, "Expressive display meets clean body."),
-        },
+        typography: sanitizeTypography(p.typography),
         imagePrompt,
       };
-
-      return ds;
     } catch (err) {
       lastError = err;
       if (attempt === 1) break;
@@ -256,26 +290,22 @@ export async function POST(req: Request) {
       );
     }
 
-    // ── Stage 1: Creative Strategy ──────────────────────────────────────────
     const strategy = await runCreativeStrategy(apiKey, prompt);
-
-    // ── Stage 2: Design System ──────────────────────────────────────────────
     const designSystem = await runDesignSystem(apiKey, strategy);
 
-    // ── Build hero image URL ─────────────────────────────────────────────────
     const baseSeed = Date.now() % 1_000_000;
-    const paletteColors = designSystem.palette
-      .filter((c) => ["primary", "secondary", "accent"].includes(c.role))
-      .map((c) => c.hex)
-      .join(", ");
-    const enrichedImagePrompt = `${designSystem.imagePrompt}, cinematic color grading inspired by ${paletteColors}, editorial quality`;
+    const referenceImages: ReferenceImage[] = Array.from({ length: 4 }).map((_, i) => {
+      const variation = `${strategy.visualLanguage}, variation ${i + 1}, concept: ${prompt}`;
+      return {
+        url: pollinationsUrl(variation, baseSeed + i),
+        prompt: variation,
+      };
+    });
 
-    // ── Compose final result ─────────────────────────────────────────────────
     const conceptResult: ConceptResult = {
       id:               nanoid(10),
-      createdAt:        new Date().toISOString(),
-      prompt,
-      summary:          strategy.summary,
+      concept:          prompt,
+      brandSummary:     strategy.summary,
       brandPersonality: strategy.brandPersonality,
       audience:         strategy.audience,
       moodKeywords:     strategy.moodKeywords,
@@ -283,16 +313,13 @@ export async function POST(req: Request) {
       palette:          designSystem.palette,
       typography:       designSystem.typography,
       voice:            strategy.voice,
-      referenceImages:  [{
-        id:     nanoid(8),
-        prompt: designSystem.imagePrompt,
-        url:    pollinationsUrl(enrichedImagePrompt, baseSeed),
-      }],
+      referenceImages,
     };
 
+    await saveConcept(conceptResult);
     const shareId = encodeConcept(conceptResult);
-    const response = { ...conceptResult, shareId };
-    return NextResponse.json(response);
+
+    return NextResponse.json({ ...conceptResult, shareId });
 
   } catch (err: unknown) {
     console.error("Generate error:", err);
