@@ -229,7 +229,7 @@ async function runDesignSystem(
 
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const prompts = buildDesignSystemPrompt(strategy);
+      const prompts = buildDesignSystemPrompt(strategy.visualLanguage, strategy.moodKeywords, strategy.brandPersonality);
       const raw = await callLlm(apiKey, prompts, 900);
       const p = extractJson(raw);
 
@@ -304,13 +304,13 @@ export async function POST(req: Request) {
 
     const conceptResult: ConceptResult = {
       id:               nanoid(10),
-      concept:          prompt,
+      prompt:           prompt,
       brandSummary:     strategy.summary,
       brandPersonality: strategy.brandPersonality,
       audience:         strategy.audience,
       moodKeywords:     strategy.moodKeywords,
       visualLanguage:   strategy.visualLanguage,
-      palette:          designSystem.palette,
+      palette:          designSystem.palette as Color[],
       typography:       designSystem.typography,
       voice:            strategy.voice,
       referenceImages,

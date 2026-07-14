@@ -121,7 +121,7 @@ export default function ConceptResultView({
   const [copyState, setCopyState] = useState("");
   const [exporting, setExporting] = useState(false);
 
-  useGoogleFonts([result.typography.heading, result.typography.body]);
+  useGoogleFonts([result.typography.heading.family, result.typography.body.family]);
 
   const hero = result.referenceImages[0];
 
@@ -217,9 +217,9 @@ export default function ConceptResultView({
           <motion.div custom={1} variants={fadeUp}>
             <h2
               className="text-[26px] md:text-[32px] leading-[1.12] tracking-tight text-white/95 mb-3"
-              style={{ fontFamily: `'${result.typography.heading}', Georgia, serif` }}
+              style={{ fontFamily: `'${result.typography.heading.family}', Georgia, serif` }}
             >
-              {result.summary}
+              {result.brandSummary}
             </h2>
             <div className="flex flex-wrap gap-1.5">
               {result.moodKeywords.map((kw) => (
@@ -273,24 +273,24 @@ export default function ConceptResultView({
                   <div className="rounded-lg bg-black/25 border border-white/[0.05] p-2.5">
                     <p className="text-[8px] text-white/25 uppercase tracking-widest mb-1.5">Heading</p>
                     <p
-                      style={{ fontFamily: `'${result.typography.heading}', serif` }}
+                      style={{ fontFamily: `'${result.typography.heading.family}', serif` }}
                       className="text-sm leading-tight text-white/85 truncate"
                     >
-                      {result.typography.heading}
+                      {result.typography.heading.family}
                     </p>
                   </div>
                   <div className="rounded-lg bg-black/25 border border-white/[0.05] p-2.5">
                     <p className="text-[8px] text-white/25 uppercase tracking-widest mb-1.5">Body</p>
                     <p
-                      style={{ fontFamily: `'${result.typography.body}', sans-serif` }}
+                      style={{ fontFamily: `'${result.typography.body.family}', sans-serif` }}
                       className="text-sm leading-tight text-white/85 truncate"
                     >
-                      {result.typography.body}
+                      {result.typography.body.family}
                     </p>
                   </div>
                 </div>
                 <p className="text-[10px] text-white/30 leading-snug italic">
-                  {result.typography.rationale}
+                  {result.typography.heading.rationale} {result.typography.body.rationale}
                 </p>
               </Card>
 
@@ -299,7 +299,7 @@ export default function ConceptResultView({
                 <Label>Brand Voice</Label>
                 <p
                   className="text-[15px] leading-relaxed text-white/75"
-                  style={{ fontFamily: `'${result.typography.heading}', Georgia, serif` }}
+                  style={{ fontFamily: `'${result.typography.heading.family}', Georgia, serif` }}
                 >
                   {result.voice}
                 </p>
@@ -334,7 +334,7 @@ export default function ConceptResultView({
               <Label>Audience</Label>
               <p
                 className="text-sm font-medium text-white/65 leading-snug"
-                style={{ fontFamily: `'${result.typography.body}', sans-serif` }}
+                style={{ fontFamily: `'${result.typography.body.family}', sans-serif` }}
               >
                 {result.audience}
               </p>
@@ -358,7 +358,7 @@ export default function ConceptResultView({
               </p>
               <p
                 className="text-[11px] text-white/45 leading-relaxed italic"
-                style={{ fontFamily: `'${result.typography.body}', sans-serif` }}
+                style={{ fontFamily: `'${result.typography.body.family}', sans-serif` }}
               >
                 &ldquo;{result.prompt}&rdquo;
               </p>
